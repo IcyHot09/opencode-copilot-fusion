@@ -1,5 +1,8 @@
 # opencode-copilot-fusion
 
+[![ci](https://github.com/IcyHot09/opencode-copilot-fusion/actions/workflows/ci.yml/badge.svg)](https://github.com/IcyHot09/opencode-copilot-fusion/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/opencode-copilot-fusion.svg)](https://www.npmjs.com/package/opencode-copilot-fusion)
+
 Use GitHub Copilot Fusion in opencode. The plugin routes each turn to Fusion's model router. The unmodified request is always a valid call to one model. If routing fails, the turn runs as if the plugin were not installed.
 
 > [!IMPORTANT]
@@ -42,17 +45,14 @@ Add this to your `opencode.json`:
 }
 ```
 
-Until the package is on npm, use the git spec instead:
+Other install specs:
 
 ```jsonc
-"plugins": ["git+https://github.com/IcyHot09/opencode-copilot-fusion.git#v0.1.0"],
+"plugins": ["git+https://github.com/IcyHot09/opencode-copilot-fusion.git#v0.1.0"]  // git tag
+"plugins": ["./path/to/opencode-copilot-fusion"]                                  // local folder; run npm install && npm run build there first
 ```
 
-Or use a local folder. Run `npm install && npm run build` in that folder first.
-
-```jsonc
-"plugins": ["./path/to/opencode-copilot-fusion"],
-```
+See [PUBLISHING.md](./PUBLISHING.md) for how releases are published.
 
 ### Options
 

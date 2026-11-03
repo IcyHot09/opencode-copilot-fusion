@@ -4,6 +4,18 @@
   "description": "Use GitHub Copilot Fusion in opencode: /auto routing with session-anchored stickiness, Fusion tiers via reasoning-effort variants, reusing opencode's stored Copilot OAuth.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IcyHot09/opencode-copilot-fusion.git"
+  },
+  "homepage": "https://github.com/IcyHot09/opencode-copilot-fusion#readme",
+  "bugs": {
+    "url": "https://github.com/IcyHot09/opencode-copilot-fusion/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "engines": {
     "node": ">=18"
   },
