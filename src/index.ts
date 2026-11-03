@@ -24,12 +24,17 @@
  */
 import { Model, Plugin } from "@opencode/plugin"
 import { resolveCopilotCredentials, type CopilotCredentials } from "./creds.js"
-import { FusionRouter, type Wire } from "./router.js"
+import { FusionRouter, credsKey } from "./router.js"
 import { extractPromptFromBody } from "./prompt.js"
-import { FUSION_TIERS, normalizeVariant, resolveWireTier, type TierAvailability } from "./tiers.js"
-import { wireOfAnchor } from "./wire.js"
+import {
+  FUSION_TIERS,
+  normalizeVariant,
+  resolveWireTier,
+  type TierAvailability,
+} from "./tiers.js"
+import { wireOfAnchor, type Wire } from "./wire.js"
 import { rewriteRequest } from "./rewrite.js"
-import { parseFusionOptions, type FusionOptions } from "./options.js"
+import { parseFusionOptions } from "./options.js"
 
 const PROVIDER_ID = "github-copilot"
 const MODEL_ID = "fusion"
@@ -43,21 +48,34 @@ export default Plugin.define({
       if (options.debug) console.error("[copilot-fusion]", ...args)
     }
     const warn = (...args: unknown[]) => console.error("[copilot-fusion] warn:", ...args)
+    const once = new Set<string>()
+    const warnOnce = (key: string, ...args: unknown[]) => {
+      if (once.has(key)) return
+      once.add(key)
+      warn(...args)
+    }
 
     const router = new FusionRouter({ timeoutMs: options.timeoutMs, skewMs: options.skewMs, log: debug })
     const state: {
       anchorWire?: Wire
-      anchorModelId?: string
       metaById?: TierAvailability["byId"]
-      creds?: { value: CopilotCredentials | undefined; at: number }
+      creds?: { value: CopilotCredentials | undefined; at: number; key: string | undefined }
       warnedMissingCreds?: boolean
     } = {}
 
     const getCreds = async (): Promise<CopilotCredentials | undefined> => {
       const cached = state.creds
-      if (cached && Date.now() - cached.at < 30_000) return cached.value
+      if (cached) {
+        // Positive results are cheap to trust for 30s; negatives re-check sooner.
+        const ttl = cached.value ? 30_000 : 5_000
+        if (Date.now() - cached.at < ttl) return cached.value
+      }
       const value = await resolveCopilotCredentials(ctx.integration)
-      state.creds = { value, at: Date.now() }
+      state.creds = {
+        value,
+        at: Date.now(),
+        key: value ? credsKey(value.token, value.baseURL) : undefined,
+      }
       return value
     }
 
@@ -78,10 +96,13 @@ export default Plugin.define({
       state.metaById = meta?.byId
       if (meta && !meta.fusionOffered) {
         warn(
-          "no enabled Fusion (type:fusion) tiers reported by /meta — this account/org " +
-            "may not have Copilot Fusion enabled (check your plan and org policy). " +
-            "Standard will route via classic Auto if hydrafusion is unavailable.",
+          "no enabled Fusion (type:fusion) tiers reported by /meta — this account or organization may not have" +
+            " Fusion enabled (check your plan and org policy). Standard uses classic Auto `balance`;" +
+            " High can fall back to classic Auto `intelligence`.",
         )
+      }
+      if (!meta) {
+        warnOnce("meta-unreachable", "could not verify Fusion availability from /meta — registering all variants optimistically")
       }
     } else {
       debug("github-copilot is not connected yet; connect it (/connect) to enable Fusion routing")
@@ -90,25 +111,19 @@ export default Plugin.define({
     // Which variants to expose — mirrors the CLI's managed fusionTier mapping:
     // high falls back to classic Auto `intelligence`; max has no fallback.
     const metaById = state.metaById
-    const hasFusionTier = (id: string) => metaById?.[id] === true
-    const hasClassic = (id: string) => metaById?.[id] === true
     const fusionUnknown = !metaById
+    const tierEnabled = (id: string) => metaById?.[id] === true
     const variantSpecs = FUSION_TIERS.filter((spec) => {
       if (spec.variant === "standard") return true
-      if (spec.variant === "max") return fusionUnknown || hasFusionTier("hydrafusion-max")
+      if (spec.variant === "max") return fusionUnknown || tierEnabled("hydrafusion-max")
       // high
       if (fusionUnknown) return true
-      if (hasFusionTier("hydrafusion")) return true
-      if (!hasFusionTier("hydrafusion") && hasClassic("intelligence")) {
-        warn("Fusion High (hydrafusion) not offered on this account — variant 'high' will route via classic Auto tier 'intelligence' (no Fusion discount).")
+      if (tierEnabled("hydrafusion")) return true
+      if (tierEnabled("intelligence")) {
+        warn("Fusion High (hydrafusion) not offered — variant 'high' will route via classic Auto tier 'intelligence' (no Fusion discount).")
         return true
       }
       return false
-    })
-    const effortSetting = (effort: "low" | "high" | "xhigh") => ({
-      reasoningEffort: effort,
-      reasoningSummary: "auto",
-      include: ["reasoning.encrypted_content"],
     })
 
     // ---- 2) Register github-copilot/fusion (inherits anchor metadata) ----
@@ -116,8 +131,12 @@ export default Plugin.define({
       const provider = PROVIDER_ID
       // Resolve anchor: explicit option, then preferred GPT anchors, then any enabled GPT, then anything.
       let anchor = options.anchorModel ? editor.get(provider, options.anchorModel) : undefined
+      if (options.anchorModel && anchor && anchor.enabled === false) {
+        warn(`anchorModel '${options.anchorModel}' is disabled in provider '${provider}' — falling back to defaults`)
+        anchor = undefined
+      }
       if (options.anchorModel && !anchor) {
-        warn(`anchorModel '${options.anchorModel}' not found/enabled in provider '${provider}' — falling back to defaults`)
+        warn(`anchorModel '${options.anchorModel}' not found in provider '${provider}' — falling back to defaults`)
       }
       if (!anchor) {
         for (const candidate of PREFERRED_ANCHORS) {
@@ -137,8 +156,14 @@ export default Plugin.define({
         return
       }
       state.anchorWire = wireOfAnchor(anchor)
-      state.anchorModelId = anchor.modelID
       debug(`fusion anchor: ${anchor.id} (modelID=${anchor.modelID}, package=${anchor.package}, wire=${state.anchorWire})`)
+
+      // Variant settings are wire-aware: Responses accepts the full effort
+      // block; other wires get reasoningEffort only.
+      const effortSetting = (effort: "low" | "high" | "xhigh") =>
+        state.anchorWire === "responses"
+          ? { reasoningEffort: effort, reasoningSummary: "auto", include: ["reasoning.encrypted_content"] }
+          : { reasoningEffort: effort }
 
       editor.update(provider, MODEL_ID, (model) => {
         const cloned = structuredClone(anchor)
@@ -161,7 +186,7 @@ export default Plugin.define({
     await ctx.session.hook(
       "compaction",
       (event) => {
-        router.invalidateSession(event.sessionID)
+        router.invalidateSession(event.sessionID, state.creds?.key ?? "")
         debug(`compaction: invalidated fusion routes for session ${event.sessionID}`)
       },
       { providerID: PROVIDER_ID },
@@ -173,9 +198,10 @@ export default Plugin.define({
         "http.response",
         (event) => {
           if (event.model.id !== MODEL_ID || event.model.providerID !== PROVIDER_ID) return
-          event.response.headers.forEach((value, name) => {
+          event.response.headers.forEach((_value, name) => {
             if (/copilot|fusion|hydra|^x-github|model/i.test(name)) {
-              debug(`fusion response header ${name}: ${value}`)
+              // Log names only: header values may contain session tokens.
+              debug(`fusion response header ${name}`)
             }
           })
         },
@@ -188,17 +214,18 @@ export default Plugin.define({
       "http.request",
       async (event) => {
         if (event.model.id !== MODEL_ID || event.model.providerID !== PROVIDER_ID) return
-        // Utility calls (titles) stay deterministic and cheap.
-        if (event.kind === "title") return
+        // Auxiliary calls stay deterministic and cheap — never route them.
+        if (event.kind === "title" || event.kind === "generate" || event.kind === "compaction") return
 
         const creds = await getCreds()
         if (!creds) {
-          if (!state.warnedMissingCreds) {
-            warn("github-copilot is not connected — routing disabled (requests will use the anchor model). Connect it and restart.")
-            state.warnedMissingCreds = true
-          }
+          warnOnce(
+            "creds-missing",
+            "github-copilot is not connected — fusion routing disabled; requests use the anchor model. Connect it and restart.",
+          )
           return
         }
+        const credsK = state.creds?.key ?? credsKey(creds.token, creds.baseURL)
 
         const cloned = await event.request.clone().json().catch(() => undefined)
         if (typeof cloned !== "object" || cloned === null) {
@@ -206,26 +233,32 @@ export default Plugin.define({
           return
         }
         const prompt = extractPromptFromBody(cloned)
-        if (!prompt) {
+        if (!prompt || (!prompt.text.trim() && !prompt.image)) {
           debug("fusion: no user prompt found in request body — leaving request unchanged")
           return
         }
-        const variant = normalizeVariant((event.model as { readonly variant?: unknown }).variant)
+        const variant = normalizeVariant(event.model.variant)
+        if (variant === undefined) {
+          warnOnce("variant-unknown", `unrecognized variant '${String(event.model.variant)}' — using 'standard'`)
+        }
+        const normalized = variant ?? "standard"
 
         const metaByIdLazy = state.metaById ?? (await getMetaById())
-        const resolved = resolveWireTier(variant, metaByIdLazy)
+        const resolved = resolveWireTier(normalized, metaByIdLazy)
         if (!resolved) {
-          throw new Error(
-            `Copilot Fusion tier '${variant}' is not enabled for this account. ` +
-              `Use a different variant (e.g. 'standard') or ask your org admin to enable Fusion.`,
+          warnOnce(
+            `variant-disabled-${normalized}`,
+            `Copilot Fusion tier '${normalized}' is not enabled for this account — using the anchor model for this turn.`,
           )
+          return
         }
 
         const result = await router.route({
           baseURL: creds.baseURL,
           token: creds.token,
+          credsKey: credsK,
           sessionID: event.sessionID,
-          variant,
+          variant: normalized,
           wire: state.anchorWire ?? "chat",
           tier: resolved.wire,
           text: prompt.text,
@@ -233,22 +266,25 @@ export default Plugin.define({
           route: options.route,
         })
         if (!result.ok) {
-          if (/HTTP (401|403)/.test(result.reason)) state.creds = undefined
-          debug(`fusion: falling back to anchor (${result.reason})`)
-          return // unmodified request = valid anchor call
+          if (result.code === "http_401" || result.code === "http_403") {
+            state.creds = undefined
+          }
+          warnOnce(`route-fallback-${result.code ?? "unknown"}`, `fusion route unavailable (${result.reason}) — using the anchor model for this turn`)
+          return
         }
         const entry = result.entry
         const rewritten = await rewriteRequest(event.request, {
           modelId: entry.modelId,
           sessionToken: entry.sessionToken,
           stripTemperature: options.stripTemperature,
+          body: cloned as Record<string, unknown>,
         })
         if (!rewritten.ok) {
-          debug(`fusion: could not rewrite request (${rewritten.reason}) — falling back to anchor`)
+          warnOnce("rewrite-failed", `fusion: could not rewrite request (${rewritten.reason}) — using the anchor model for this turn`)
           return
         }
         event.request = rewritten.request
-        debug(`fusion: ${variant} -> ${entry.modelId}${resolved.degraded ? " (degraded: classic Auto tier)" : ""}`)
+        debug(`fusion: ${normalized} -> ${entry.modelId}${resolved.degraded ? " (degraded: classic Auto tier)" : ""}`)
       },
       { providerID: PROVIDER_ID },
     )

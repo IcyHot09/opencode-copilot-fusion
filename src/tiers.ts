@@ -44,8 +44,9 @@ export function isFusionVariant(value: unknown): value is FusionVariant {
   return value === "standard" || value === "high" || value === "max"
 }
 
-export function normalizeVariant(value: unknown): FusionVariant {
-  return isFusionVariant(value) ? value : "standard"
+/** Returns the variant or undefined for anything unrecognized. */
+export function normalizeVariant(value: unknown): FusionVariant | undefined {
+  return isFusionVariant(value) ? value : undefined
 }
 
 export interface TierAvailability {
@@ -102,9 +103,11 @@ export function parseFusionMeta(payload: unknown): FusionMetaTiers | undefined {
     if (typeof raw !== "object" || raw === null) continue
     const tier = raw as { id?: unknown; type?: unknown; status?: { enabled?: unknown } }
     if (typeof tier.id !== "string") continue
-    const enabled = typeof tier.status?.enabled === "boolean" ? tier.status.enabled : false
-    byId[tier.id] = enabled
-    if (tier.type === "fusion" && enabled) fusionOffered = true
+    // Unknown shape is not "disabled" — only a real boolean counts.
+    if (typeof tier.status?.enabled === "boolean") {
+      byId[tier.id] = tier.status.enabled
+      if (tier.type === "fusion" && tier.status.enabled) fusionOffered = true
+    }
   }
   return { byId, fusionOffered }
 }

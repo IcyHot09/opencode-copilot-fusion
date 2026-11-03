@@ -16,8 +16,11 @@ function textFromContentPart(part: unknown): string {
   if (typeof part !== "object" || part === null) return ""
   const p = part as Record<string, unknown>
   if (typeof p.text === "string") return p.text
+  if (typeof (p.text as { value?: unknown } | undefined)?.value === "string") {
+    return (p.text as { value: string }).value
+  }
   if (typeof p.input_text === "string") return p.input_text
-  // Responses API text items may nest under { text: { value } } — tolerate.
+  // Tolerate { type, value }-shaped text parts.
   if (typeof p.value === "string") return p.value
   return ""
 }
@@ -80,13 +83,4 @@ export function extractPromptFromBody(body: unknown): ExtractedPrompt | null {
   const fromMessages = fromChatMessages(record.messages)
   if (fromMessages) return fromMessages
   return null
-}
-
-/** Which request format this body uses, so the router knows the wire. */
-export function detectBodyKind(body: unknown): "responses" | "chat" | "unknown" {
-  if (typeof body !== "object" || body === null) return "unknown"
-  const record = body as Record<string, unknown>
-  if (record.input !== undefined) return "responses"
-  if (record.messages !== undefined) return "chat"
-  return "unknown"
 }

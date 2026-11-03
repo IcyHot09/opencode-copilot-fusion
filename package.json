@@ -13,7 +13,7 @@
     "url": "https://github.com/IcyHot09/opencode-copilot-fusion/issues"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "exports": {
     ".": {
@@ -36,6 +36,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "npm run build && node --test \"test/*.test.js\"",
+    "prepare": "npm run build",
     "prepack": "npm run build"
   },
   "dependencies": {

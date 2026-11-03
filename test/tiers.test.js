@@ -7,13 +7,14 @@ import {
   FUSION_TIERS,
 } from "../dist/tiers.js"
 
-test("normalizeVariant defaults to standard and is strict", () => {
+test("normalizeVariant is strict", () => {
   assert.equal(normalizeVariant("high"), "high")
   assert.equal(normalizeVariant("max"), "max")
   assert.equal(normalizeVariant("standard"), "standard")
-  assert.equal(normalizeVariant("xhigh"), "standard") // not a fusion variant
-  assert.equal(normalizeVariant(undefined), "standard")
-  assert.equal(normalizeVariant(42), "standard")
+  assert.equal(normalizeVariant("xhigh"), undefined)
+  assert.equal(normalizeVariant("hgh"), undefined)
+  assert.equal(normalizeVariant(undefined), undefined)
+  assert.equal(normalizeVariant(42), undefined)
 })
 
 test("unknown meta passes canonical wire tiers through", () => {
@@ -28,7 +29,7 @@ test("enabled fusion tiers are used as-is", () => {
   assert.equal(resolveWireTier("max", byId)?.wire, "hydrafusion-max")
 })
 
-test("high degrades to intelligence when hydrafusion is unavailable (managed fusionTier mapping)", () => {
+test("high degrades to intelligence when hydrafusion is disabled (managed fusionTier mapping)", () => {
   const byId = { balance: true, hydrafusion: false, intelligence: true, efficiency: true }
   assert.deepEqual(resolveWireTier("high", byId), { wire: "intelligence", degraded: true })
 })
@@ -38,10 +39,9 @@ test("high is unavailable when neither hydrafusion nor intelligence is offered",
   assert.equal(resolveWireTier("high", byId), null)
 })
 
-test("max has no fallback — unknown-disabled means unavailable", () => {
+test("max never falls back — disabled means unavailable", () => {
   assert.equal(resolveWireTier("max", { "hydrafusion-max": false }), null)
-  const byId = { "hydrafusion-max": false }
-  assert.equal(resolveWireTier("max", byId), null)
+  assert.equal(resolveWireTier("max", { "hydrafusion-max": false, hydrafusion: true, balance: true }), null)
 })
 
 test("tiers absent from meta still route (server is the judge)", () => {
@@ -69,14 +69,24 @@ test("parseFusionMeta reads enabled flags and fusion presence", () => {
 
   const noFusion = parseFusionMeta({ auto: { tiers: [{ id: "intelligence", type: "auto", status: { enabled: true } }] } })
   assert.equal(noFusion?.fusionOffered, false)
-
-  assert.equal(parseFusionMeta(garbageSafe()), undefined)
-  assert.equal(parseFusionMeta({ auto: {} }), undefined)
 })
 
-function garbageSafe() {
-  return "<html>500</html>"
-}
+test("parseFusionMeta: missing or wrong status.enabled type is unknown, not disabled", () => {
+  const meta = parseFusionMeta({
+    auto: { tiers: [{ id: "hydrafusion", type: "fusion", status: {} }, { id: "balance", type: "auto" }] },
+  })
+  assert.ok(meta)
+  assert.deepEqual(Object.keys(meta.byId), [])
+  assert.equal(meta.fusionOffered, false)
+  // Unknown tier shape must resolve to the canonical wire, not null.
+  assert.equal(resolveWireTier("high", meta.byId)?.wire, "hydrafusion")
+})
+
+test("parseFusionMeta returns undefined for garbage", () => {
+  assert.equal(parseFusionMeta("<html>500</html>"), undefined)
+  assert.equal(parseFusionMeta({ auto: {} }), undefined)
+  assert.equal(parseFusionMeta({ auto: { tiers: "nope" } }), undefined)
+})
 
 test("tier spec effort mapping matches the plan", () => {
   const byVariant = Object.fromEntries(FUSION_TIERS.map((t) => [t.variant, t]))

@@ -4,17 +4,18 @@ The release workflow publishes a tarball with every `v*` tag. The workflow build
 
 ## Release flow
 
-1. `npm version patch` (or `minor` / `major`). This updates `package.json`, commits, and creates the tag.
-2. `git push --follow-tags`
-3. The `release` workflow runs. It packs `opencode-copilot-fusion-<version>.tgz` and uploads it to the GitHub release for the tag.
+1. Update the install pins in `README.md` and in this file to the new version (`X.Y.Z` and `vX.Y.Z` occurrences).
+2. `npm version patch` (or `minor` / `major`). This updates `package.json`, commits, and creates the tag.
+3. `git push --follow-tags`
+4. The `release` workflow verifies that the tag matches `package.json`, then builds, tests, packs, and uploads the tarball to the GitHub release for the tag.
 
-You can also create the release by hand from **Actions → release → Run workflow**.
+You can also create the release by hand from **Actions → release → Run workflow**; pass the existing tag when asked.
 
 ## Install from the tarball
 
 ```sh
 mkdir -p ~/.config/opencode/plugins/opencode-copilot-fusion
-curl -L -o fusion.tgz https://github.com/IcyHot09/opencode-copilot-fusion/releases/download/v0.2.0/opencode-copilot-fusion-0.2.0.tgz
+curl -L -o fusion.tgz https://github.com/IcyHot09/opencode-copilot-fusion/releases/download/v0.2.2/opencode-copilot-fusion-0.2.2.tgz
 tar -xzf fusion.tgz -C ~/.config/opencode/plugins/opencode-copilot-fusion --strip-components=1
 ```
 

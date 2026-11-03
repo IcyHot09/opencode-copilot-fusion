@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { extractPromptFromBody, detectBodyKind } from "../dist/prompt.js"
+import { extractPromptFromBody } from "../dist/prompt.js"
 
 test("responses API body: last user text wins", () => {
   const body = {
@@ -12,7 +12,6 @@ test("responses API body: last user text wins", () => {
     ],
   }
   assert.deepEqual(extractPromptFromBody(body), { text: "second task", image: false })
-  assert.equal(detectBodyKind(body), "responses")
 })
 
 test("responses API body with image detection", () => {
@@ -28,6 +27,11 @@ test("responses API with bare string input", () => {
   assert.deepEqual(extractPromptFromBody({ input: "hello" }), { text: "hello", image: false })
 })
 
+test("input_image-only user message yields empty text with image=true", () => {
+  const body = { input: [{ role: "user", content: [{ type: "input_image", image_url: "data:x" }] }] }
+  assert.deepEqual(extractPromptFromBody(body), { text: "", image: true })
+})
+
 test("chat completions body: last user text wins", () => {
   const body = {
     model: "gpt-6-luna",
@@ -38,7 +42,6 @@ test("chat completions body: last user text wins", () => {
     ],
   }
   assert.deepEqual(extractPromptFromBody(body), { text: "second", image: true })
-  assert.equal(detectBodyKind(body), "chat")
 })
 
 test("non-user roles are skipped", () => {
@@ -50,10 +53,14 @@ test("empty / missing bodies", () => {
   assert.equal(extractPromptFromBody(undefined), null)
   assert.equal(extractPromptFromBody({}), null)
   assert.equal(extractPromptFromBody({ input: [] }), null)
-  assert.equal(detectBodyKind({}), "unknown")
 })
 
 test("multi-part text is concatenated", () => {
   const body = { messages: [{ role: "user", content: [{ type: "text", text: "fix" }, { type: "text", text: "the bug" }] }] }
   assert.deepEqual(extractPromptFromBody(body), { text: "fix the bug", image: false })
+})
+
+test("nested { text: { value } } parts are tolerated", () => {
+  const body = { messages: [{ role: "user", content: [{ type: "text", text: { value: "nested part" } }] }] }
+  assert.deepEqual(extractPromptFromBody(body), { text: "nested part", image: false })
 })

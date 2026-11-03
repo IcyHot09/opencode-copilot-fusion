@@ -24,6 +24,14 @@ test("model swap + session token injection, temperature dropped", async () => {
   assert.equal(result.request.method, "POST")
 })
 
+test("preparsed body is used when given", async () => {
+  const original = makeRequest({ model: "gpt-6-luna", temperature: 0.9 })
+  const result = await rewriteRequest(original, { modelId: "x", sessionToken: "t", body: { model: "y", keep: 1 } })
+  assert.equal(result.ok, true)
+  const body = await result.request.json()
+  assert.deepEqual(body, { model: "x", keep: 1 })
+})
+
 test("temperature kept when stripTemperature is false", async () => {
   const original = makeRequest({ model: "gpt-6-luna", temperature: 0.2 })
   const result = await rewriteRequest(original, { modelId: "x", sessionToken: "t", stripTemperature: false })
@@ -41,4 +49,25 @@ test("non-JSON body fails cleanly", async () => {
   const original = new Request("https://api.githubcopilot.com/chat/completions", { method: "POST", body: "not-json" })
   const result = await rewriteRequest(original, { modelId: "x", sessionToken: "t" })
   assert.equal(result.ok, false)
+})
+
+test("session token with illegal header bytes fails cleanly instead of throwing", async () => {
+  const original = makeRequest({ model: "a" })
+  const result = await rewriteRequest(original, { modelId: "x", sessionToken: "tok\nwith\nnewlines" })
+  assert.equal(result.ok, false)
+  assert.match(result.reason, /token/)
+})
+
+test("the abort signal follows the original controller", async () => {
+  const controller = new AbortController()
+  const original = new Request("https://api.githubcopilot.com/chat/completions", {
+    method: "POST",
+    body: JSON.stringify({ model: "a" }),
+    signal: controller.signal,
+  })
+  const result = await rewriteRequest(original, { modelId: "b", sessionToken: "tok" })
+  assert.equal(result.ok, true)
+  assert.notEqual(result.request.signal, controller.signal) // undici derives a dependent signal
+  controller.abort("cancelled by user")
+  assert.equal(result.request.signal.aborted, true)
 })

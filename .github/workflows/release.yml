@@ -4,21 +4,34 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release (e.g. v0.2.2)"
+        required: true
 
 permissions:
   contents: write   # create the release and upload the tarball
+
+env:
+  REF_NAME: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
   pack:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ env.REF_NAME }}
 
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
           package-manager-cache: false
+
+      - name: Verify tag matches package.json version
+        run: |
+          node -e "const v = 'v' + require('./package.json').version; if (v !== process.env.REF_NAME) { console.error('tag ' + process.env.REF_NAME + ' does not match package.json version (' + v + ')'); process.exit(1) }"
 
       - run: npm ci
       - run: npm test
@@ -35,7 +48,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TARBALL: ${{ steps.pack.outputs.tarball }}
         run: |
-          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+          if ! gh release view "$REF_NAME" >/dev/null 2>&1; then
+            gh release create "$REF_NAME" --verify-tag --generate-notes --title "$REF_NAME"
           fi
-          gh release upload "$GITHUB_REF_NAME" "$TARBALL" --clobber
+          gh release upload "$REF_NAME" "$TARBALL" --clobber

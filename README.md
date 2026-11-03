@@ -16,7 +16,7 @@ Use GitHub Copilot Fusion in opencode. The plugin routes each turn to Fusion's m
 | `github-copilot/fusion#high` | Fusion High | `hydrafusion` | `high` | Pro+ / Max / Business / Enterprise |
 | `github-copilot/fusion#max` | Fusion Max | `hydrafusion-max` | `xhigh` | Pro+ / Max / Business / Enterprise |
 
-If Fusion High is available but `hydrafusion` is not, the `high` variant uses classic Auto `intelligence`. Fusion Max has no fallback. The plugin reads `GET /meta` at startup and keeps only the variants your account can run. The plugin refuses a variant the account cannot run, with a clear message.
+If Fusion High is available but `hydrafusion` is not, the `high` variant uses classic Auto `intelligence`. Fusion Max has no fallback. The plugin reads `GET /meta` at startup and keeps only the variants your account can run. A variant the account cannot run shows a one-shot warning and runs on the anchor model.
 
 ## How it works
 
@@ -35,18 +35,18 @@ What matches the CLI:
 - Sticky session anchor with re-evaluation on compaction (the CLI re-anchors for long-context sessions), on token near-expiry, on variant switch, and on an image prompt without vision.
 - The 24-hour session token, refreshed before expiry. Billing per underlying model, with the paid-plan 30% discount applied server-side through 2026-11-30.
 - Cascade, critique, and parallel-model orchestration are server-side. They work unchanged for every routed turn; no client support is needed.
-- Tool calls, images, system prompts, and streams pass through untouched; only the body's `model` field and headers are rewritten.
+- Tool calls, images, system prompts, and streams pass through untouched; the rewrite swaps the body's `model` field, deletes `temperature` by default, and sets the session token header.
 
 What differs from the CLI:
 
-- The CLI shows which models ran a turn. opencode does not surface that data yet. With `FUSION_DEBUG=1`, the plugin logs the pick, `hydra_scores` and `discounted_costs` if the server sends them, and any Fusion-related response headers — but a full per-turn model list is not guaranteed to exist.
+- The CLI shows which models ran a turn. opencode does not surface that data yet. With `FUSION_DEBUG=1`, the plugin logs the pick, `hydra_scores` and `discounted_costs` if the server sends them, and the names of any Fusion-related response headers — but a full per-turn model list is not guaranteed to exist.
 - The CLI pins the primary model for the session; so does this plugin. If you want Fusion re-evaluated on every prompt, set `"route": "prompt"` in the options. Expect a routing call per prompt and no prompt-cache warmth between turns.
 - The CLI can use WebSocket transport to GitHub's backends; opencode uses HTTP. Streaming looks the same from your side.
 - Claude picks need an Anthropic-native anchor (`anchorModel` set to a Claude model). Otherwise a Claude pick on a GPT anchor falls back to the anchor, and the plugin logs it.
 
 ## Requirements
 
-- opencode v2.2.5 or later. Opencode v1 is not supported.
+- Opencode v2. Developed against v2.2.5. Opencode v1 is not supported.
 - GitHub Copilot connected in opencode (`opencode auth login`, or `/connect` in the TUI). Use the account that has the Copilot seat.
 - Plan support for the tiers you want. Standard: all plans. High and Max: Pro+, Max, Business, Enterprise. The 30% launch discount: paid plans only.
 - Organization policy. Business and Enterprise owners can restrict the models available for Fusion. If your owner disabled them, `/meta` reports the tiers disabled.
@@ -58,7 +58,7 @@ Add this to your `opencode.json`:
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugins": ["git+https://github.com/IcyHot09/opencode-copilot-fusion.git#v0.2.0"],
+  "plugins": ["git+https://github.com/IcyHot09/opencode-copilot-fusion.git#v0.2.2"],
   "model": "github-copilot/fusion",
 }
 ```
@@ -67,7 +67,7 @@ Or install the release tarball:
 
 ```sh
 mkdir -p ~/.config/opencode/plugins/opencode-copilot-fusion
-curl -L -o fusion.tgz https://github.com/IcyHot09/opencode-copilot-fusion/releases/download/v0.2.0/opencode-copilot-fusion-0.2.0.tgz
+curl -L -o fusion.tgz https://github.com/IcyHot09/opencode-copilot-fusion/releases/download/v0.2.2/opencode-copilot-fusion-0.2.2.tgz
 tar -xzf fusion.tgz -C ~/.config/opencode/plugins/opencode-copilot-fusion --strip-components=1
 ```
 
@@ -95,7 +95,7 @@ See [PUBLISHING.md](./PUBLISHING.md) for how releases are published.
   } }
 ```
 
-The anchor keeps your prompts servable. Fusion can pick a model on another wire (for example `/v1/messages` versus `/responses`). The plugin falls back to the anchor for that turn and logs the reason. To serve Claude picks over Anthropic's `/v1/messages`, set `anchorModel` to a Claude model your account has.
+The anchor keeps your prompts servable. Fusion can pick a model on another wire (for example `/v1/messages` versus `/responses`). The plugin falls back to the anchor for that turn, prints a one-shot warning, and logs the reason with `FUSION_DEBUG=1`. To serve Claude picks over Anthropic's `/v1/messages`, set `anchorModel` to a Claude model your account has. If the plugin cannot verify the picked model's wire (no endpoints advertised anywhere), it proceeds anyway; a cross-wire pick then fails with the provider's error.
 
 ## Usage
 
@@ -117,7 +117,7 @@ Titles are never routed. Compaction drops the pinned pick, so the next turn re-a
 
 - **HTTP 404 from the router**: your account or organization cannot use Fusion right now. Ask your organization owner to enable the Fusion models, or use `standard`, if your plan includes it.
 - **Everything falls back to the anchor**: run with `FUSION_DEBUG=1` and read the log. The usual causes: Copilot is not connected, the organization disabled the tiers, or the account has no Fusion access.
-- **`tier 'max' is not enabled for this account`**: your seat cannot run Fusion Max. Use `standard` or `high`.
+- **`Copilot Fusion tier 'max' is not enabled for this account`** appears in the logs once; the turn runs on the anchor model. Your seat cannot run Fusion Max. Use `standard` or `high`.
 - **HTTP 401 or 403**: your Copilot token expired or you revoked it. Run `opencode auth login` again. The plugin re-reads the credential on the next request.
 - **Routed model rejects the request**: keep `stripTemperature` at `true` (the default). If a pick still fails, report it with the `FUSION_DEBUG=1` output.
 
