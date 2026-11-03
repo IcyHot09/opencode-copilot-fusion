@@ -1,7 +1,7 @@
 # opencode-copilot-fusion
 
 [![ci](https://github.com/IcyHot09/opencode-copilot-fusion/actions/workflows/ci.yml/badge.svg)](https://github.com/IcyHot09/opencode-copilot-fusion/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/opencode-copilot-fusion.svg)](https://www.npmjs.com/package/opencode-copilot-fusion)
+[![release](https://img.shields.io/github/v/release/IcyHot09/opencode-copilot-fusion.svg)](https://github.com/IcyHot09/opencode-copilot-fusion/releases/latest)
 
 Use GitHub Copilot Fusion in opencode. The plugin routes each turn to Fusion's model router. The unmodified request is always a valid call to one model. If routing fails, the turn runs as if the plugin were not installed.
 
@@ -40,16 +40,25 @@ Add this to your `opencode.json`:
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugins": ["opencode-copilot-fusion"],
+  "plugins": ["git+https://github.com/IcyHot09/opencode-copilot-fusion.git#v0.2.0"],
   "model": "github-copilot/fusion",
 }
 ```
 
-Other install specs:
+Or install the release tarball:
+
+```sh
+mkdir -p ~/.config/opencode/plugins/opencode-copilot-fusion
+curl -L -o fusion.tgz https://github.com/IcyHot09/opencode-copilot-fusion/releases/download/v0.2.0/opencode-copilot-fusion-0.2.0.tgz
+tar -xzf fusion.tgz -C ~/.config/opencode/plugins/opencode-copilot-fusion --strip-components=1
+```
+
+opencode discovers plugins in `~/.config/opencode/plugins/` at startup. Restart opencode if the model does not appear. Windows ships `tar`, so the same commands work in PowerShell.
+
+Or use a local folder. Run `npm install && npm run build` in that folder first:
 
 ```jsonc
-"plugins": ["git+https://github.com/IcyHot09/opencode-copilot-fusion.git#v0.1.0"]  // git tag
-"plugins": ["./path/to/opencode-copilot-fusion"]                                  // local folder; run npm install && npm run build there first
+"plugins": ["./path/to/opencode-copilot-fusion"],
 ```
 
 See [PUBLISHING.md](./PUBLISHING.md) for how releases are published.
