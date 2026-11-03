@@ -1,6 +1,6 @@
 {
   "name": "opencode-copilot-fusion",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Use GitHub Copilot Fusion in opencode: /auto routing with session-anchored stickiness, Fusion tiers via reasoning-effort variants, reusing opencode's stored Copilot OAuth.",
   "type": "module",
   "license": "MIT",
