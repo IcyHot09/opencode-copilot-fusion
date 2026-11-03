@@ -1,0 +1,40 @@
+{
+  "name": "opencode-copilot-fusion",
+  "version": "0.1.0",
+  "description": "Use GitHub Copilot Fusion in opencode: /auto routing with session-anchored stickiness, Fusion tiers via reasoning-effort variants, reusing opencode's stored Copilot OAuth.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "opencode",
+    "github-copilot",
+    "copilot-fusion",
+    "plugin"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "npm run build && node --test \"test/*.test.js\"",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.2.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}
