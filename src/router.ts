@@ -194,6 +194,10 @@ export class FusionRouter {
 
     const parsed = parseAutoResponse(data)
     if (!parsed) return this.previousOrFail(key, cached, "response missing session_token or selected_model.id")
+    if (this.options.log) {
+      const raw = data as Record<string, unknown>
+      this.log(`fusion /auto picked ${parsed.modelId}${raw.hydra_scores ? `; hydra_scores=${JSON.stringify(raw.hydra_scores)}` : ""}${raw.discounted_costs ? `; discounted_costs=${JSON.stringify(raw.discounted_costs)}` : ""}`)
+    }
 
     // Cross-wire guard: if Fusion picked a model that cannot serve the
     // anchor's wire, don't send the request into a 400 — fall back to anchor.

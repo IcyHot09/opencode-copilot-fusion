@@ -26,6 +26,24 @@ If Fusion High is available but `hydrafusion` is not, the `high` variant uses cl
 4. The plugin reuses the pick for the rest of the session (sticky). It re-routes only after compaction, on token near-expiry, on variant switch, or on an image prompt when the pick lacks vision.
 5. If `/auto` fails or returns no usable model, the turn runs on the anchor model without the session token. The user still gets an answer.
 
+Fusion's execution patterns (single model, cascade, critique, and parallel model calls) run on GitHub's servers per prompt. The client cannot force or inspect them; the tier selects how much orchestration is allowed.
+
+## Parity with Copilot CLI
+
+What matches the CLI:
+
+- Sticky session anchor with re-evaluation on compaction (the CLI re-anchors for long-context sessions), on token near-expiry, on variant switch, and on an image prompt without vision.
+- The 24-hour session token, refreshed before expiry. Billing per underlying model, with the paid-plan 30% discount applied server-side through 2026-11-30.
+- Cascade, critique, and parallel-model orchestration are server-side. They work unchanged for every routed turn; no client support is needed.
+- Tool calls, images, system prompts, and streams pass through untouched; only the body's `model` field and headers are rewritten.
+
+What differs from the CLI:
+
+- The CLI shows which models ran a turn. opencode does not surface that data yet. With `FUSION_DEBUG=1`, the plugin logs the pick, `hydra_scores` and `discounted_costs` if the server sends them, and any Fusion-related response headers — but a full per-turn model list is not guaranteed to exist.
+- The CLI pins the primary model for the session; so does this plugin. If you want Fusion re-evaluated on every prompt, set `"route": "prompt"` in the options. Expect a routing call per prompt and no prompt-cache warmth between turns.
+- The CLI can use WebSocket transport to GitHub's backends; opencode uses HTTP. Streaming looks the same from your side.
+- Claude picks need an Anthropic-native anchor (`anchorModel` set to a Claude model). Otherwise a Claude pick on a GPT anchor falls back to the anchor, and the plugin logs it.
+
 ## Requirements
 
 - opencode v2.2.5 or later. Opencode v1 is not supported.

@@ -167,7 +167,23 @@ export default Plugin.define({
       { providerID: PROVIDER_ID },
     )
 
-    // ---- 4) Route + rewrite on the wire ----
+    // ---- 4) Surface any server headers that reveal fusion orchestration (debug only) ----
+    if (options.debug) {
+      await ctx.session.hook(
+        "http.response",
+        (event) => {
+          if (event.model.id !== MODEL_ID || event.model.providerID !== PROVIDER_ID) return
+          event.response.headers.forEach((value, name) => {
+            if (/copilot|fusion|hydra|^x-github|model/i.test(name)) {
+              debug(`fusion response header ${name}: ${value}`)
+            }
+          })
+        },
+        { providerID: PROVIDER_ID },
+      )
+    }
+
+    // ---- 5) Route + rewrite on the wire ----
     await ctx.session.hook(
       "http.request",
       async (event) => {
