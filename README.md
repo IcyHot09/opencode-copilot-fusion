@@ -58,7 +58,7 @@ Add this to your `opencode.json`:
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugins": ["git+https://github.com/IcyHot09/opencode-copilot-fusion.git#v0.2.2"],
+  "plugins": ["git+https://github.com/IcyHot09/opencode-copilot-fusion.git#v0.2.3"],
   "model": "github-copilot/fusion",
 }
 ```
@@ -67,7 +67,7 @@ Or install the release tarball:
 
 ```sh
 mkdir -p ~/.config/opencode/plugins/opencode-copilot-fusion
-curl -L -o fusion.tgz https://github.com/IcyHot09/opencode-copilot-fusion/releases/download/v0.2.2/opencode-copilot-fusion-0.2.2.tgz
+curl -L -o fusion.tgz https://github.com/IcyHot09/opencode-copilot-fusion/releases/download/v0.2.3/opencode-copilot-fusion-0.2.3.tgz
 tar -xzf fusion.tgz -C ~/.config/opencode/plugins/opencode-copilot-fusion --strip-components=1
 ```
 

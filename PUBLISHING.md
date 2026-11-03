@@ -15,7 +15,7 @@ You can also create the release by hand from **Actions → release → Run workf
 
 ```sh
 mkdir -p ~/.config/opencode/plugins/opencode-copilot-fusion
-curl -L -o fusion.tgz https://github.com/IcyHot09/opencode-copilot-fusion/releases/download/v0.2.2/opencode-copilot-fusion-0.2.2.tgz
+curl -L -o fusion.tgz https://github.com/IcyHot09/opencode-copilot-fusion/releases/download/v0.2.3/opencode-copilot-fusion-0.2.3.tgz
 tar -xzf fusion.tgz -C ~/.config/opencode/plugins/opencode-copilot-fusion --strip-components=1
 ```
 

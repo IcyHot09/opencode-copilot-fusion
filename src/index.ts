@@ -213,6 +213,7 @@ export default Plugin.define({
     await ctx.session.hook(
       "http.request",
       async (event) => {
+        try {
         if (event.model.id !== MODEL_ID || event.model.providerID !== PROVIDER_ID) return
         // Auxiliary calls stay deterministic and cheap — never route them.
         if (event.kind === "title" || event.kind === "generate" || event.kind === "compaction") return
@@ -226,6 +227,10 @@ export default Plugin.define({
           return
         }
         const credsK = state.creds?.key ?? credsKey(creds.token, creds.baseURL)
+        if (!state.anchorWire) {
+          debug("fusion: anchor wire unresolved — leaving request unchanged")
+          return
+        }
 
         const cloned = await event.request.clone().json().catch(() => undefined)
         if (typeof cloned !== "object" || cloned === null) {
@@ -259,7 +264,7 @@ export default Plugin.define({
           credsKey: credsK,
           sessionID: event.sessionID,
           variant: normalized,
-          wire: state.anchorWire ?? "chat",
+          wire: state.anchorWire,
           tier: resolved.wire,
           text: prompt.text,
           image: prompt.image,
@@ -285,6 +290,13 @@ export default Plugin.define({
         }
         event.request = rewritten.request
         debug(`fusion: ${normalized} -> ${entry.modelId}${resolved.degraded ? " (degraded: classic Auto tier)" : ""}`)
+        } catch (error) {
+          // Last-resort: never abort the turn in the plugin's name.
+          warnOnce(
+            "unexpected-fusion-error",
+            `unexpected error in fusion routing — using the anchor model for this turn: ${error instanceof Error ? error.message : String(error)}`,
+          )
+        }
       },
       { providerID: PROVIDER_ID },
     )
